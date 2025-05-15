@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Weather App</title>
+    <style>
+        :root {
+            --bg-light: #ffffff;
+            --bg-dark: #1e1e1e;
+            --text-light: #000000;
+            --text-dark: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-size: cover;
+            background-position: center;
+            margin: 0;
+            display:block;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        body {
+    display: block; /* or remove display */
+    margin: 2rem auto; /* center horizontally with some top margin */
+    max-width: 400px; /* same as container max width */
+    color: #333;
+    background-image: url('weather.jpg');
+    background-size: cover;
+    background-position: center;
+}
+
+
+        .weather-container {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 2rem;
+            border-radius: 1rem;
+            text-align: center;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+        }
+
+        input, button, select {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .weather-info, .forecast, .hourly, .favorites {
+            margin-top: 1rem;
+            text-align: left;
+        }
+
+        .forecast-day, .hour-slot {
+            background-color: #f1f1f1;
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+        }
+
+        .flag {
+            height: 20px;
+            vertical-align: middle;
+        }
+
+        .dark-mode {
+            background-color: var(--bg-dark);
+            color: var(--text-dark);
+        }
+
+        .dark-mode .weather-container {
+            background-color: rgba(30, 30, 30, 0.9);
+            color: var(--text-dark);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="weather-container">
+        <h2>🌤️ Weather App</h2>
+        <input type="text" id="city" placeholder="Enter city or leave blank for current location">
+        <button onclick="getWeather()">Get Weather</button>
+        <button onclick="toggleUnits()">Toggle °C/°F</button>
+        <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+        <div class="weather-info" id="weatherInfo"></div>
+        <div class="forecast" id="forecast"></div>
+        <div class="hourly" id="hourly"></div>
+    </div>
+
+    <script>
+        let API_KEY = 'f15698c1ccbd767c2653fbced2c133f1';
+        let isCelsius = true;
+        let currentCity = '';
+
+        function getWeather() {
+            const cityInput = document.getElementById("city").value;
+            if (cityInput.trim()) {
+                fetchWeather(cityInput);
+            } else {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const { latitude, longitude } = position.coords;
+                        fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${API_KEY}`)
+                            .then(res => res.json())
+                            .then(data => fetchWeather(data.name));
+                    },
+                    () => alert("Geolocation not allowed or unavailable")
+                );
+            }
+        }
+
+        function fetchWeather(city) {
+            currentCity = city;
+            let unit = isCelsius ? 'metric' : 'imperial';
+            const weatherURL = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${API_KEY}&units=${unit}`;
+            const forecastURL = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${API_KEY}&units=${unit}`;
+
+            fetch(weatherURL)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.cod !== 200) throw new Error(data.message);
+                    updateBackground(data.weather[0].main);
+                    document.getElementById("weatherInfo").innerHTML = `
+                        <h3>${data.name}, ${data.sys.country} <img class="flag" src="https://flagsapi.com/${data.sys.country}/flat/32.png"></h3>
+                        <p><img src="https://openweathermap.org/img/wn/${data.weather[0].icon}@4x.png"> ${data.weather[0].description}</p>
+                        <p>🌡️ Temp: ${data.main.temp}°${isCelsius ? 'C' : 'F'} (Feels like: ${data.main.feels_like}°)</p>
+                        <p>💧 Humidity: ${data.main.humidity}%</p>
+                        <p>🌬️ Wind: ${data.wind.speed} ${isCelsius ? 'm/s' : 'mph'}</p>
+                        <p>🌅 Sunrise: ${new Date(data.sys.sunrise * 1000).toLocaleTimeString()}</p>
+                        <p>🌇 Sunset: ${new Date(data.sys.sunset * 1000).toLocaleTimeString()}</p>
+                    `;
+
+                    fetch(forecastURL)
+                        .then(res => res.json())
+                        .then(forecastData => {
+                            displayForecast(forecastData);
+                            displayHourly(forecastData);
+                        });
+                })
+                .catch(() => {
+                    document.getElementById("weatherInfo").innerHTML = "<p style='color:red;'>City not found</p>";
+                    document.getElementById("forecast").innerHTML = "";
+                });
+        }
+
+        function displayForecast(data) {
+            let html = "<h4>5-Day Forecast</h4>";
+            const days = {};
+            data.list.forEach(item => {
+                const date = new Date(item.dt_txt);
+                const day = date.toLocaleDateString(undefined, { weekday: 'long' });
+                if (!days[day] && Object.keys(days).length < 5) {
+                    days[day] = item;
+                    html += `<div class='forecast-day'>
+                        <strong>${day}</strong>: ${item.weather[0].description} 🌡️ ${item.main.temp}°
+                        <img src="https://openweathermap.org/img/wn/${item.weather[0].icon}.png">
+                    </div>`;
+                }
+            });
+            document.getElementById("forecast").innerHTML = html;
+        }
+
+        function displayHourly(data) {
+            let html = "<h4>Next Hours</h4>";
+            for (let i = 0; i < 6; i++) {
+                const item = data.list[i];
+                const date = new Date(item.dt_txt);
+                html += `<div class='hour-slot'>
+                    <strong>${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>: 
+                    ${item.weather[0].description}, 🌡️ ${item.main.temp}°
+                    <img src="https://openweathermap.org/img/wn/${item.weather[0].icon}.png">
+                </div>`;
+            }
+            document.getElementById("hourly").innerHTML = html;
+        }
+
+        function toggleUnits() {
+            isCelsius = !isCelsius;
+            if (currentCity) fetchWeather(currentCity);
+        }
+
+        function toggleDarkMode() {
+            document.body.classList.toggle("dark-mode");
+        }
+
+        function updateBackground(condition) {
+            const backgrounds = {
+                Clear: 'https://source.unsplash.com/1600x900/?clear,sky',
+                Clouds: 'https://source.unsplash.com/1600x900/?cloudy,sky',
+                Rain: 'https://source.unsplash.com/1600x900/?rain',
+                Snow: 'https://source.unsplash.com/1600x900/?snow',
+                Thunderstorm: 'https://source.unsplash.com/1600x900/?thunderstorm',
+                Drizzle: 'https://source.unsplash.com/1600x900/?drizzle',
+                Mist: 'https://source.unsplash.com/1600x900/?mist',
+                Fog: 'https://source.unsplash.com/1600x900/?fog'
+            };
+            document.body.style.backgroundImage = `url('${backgrounds[condition] || 'https://source.unsplash.com/1600x900/?weather'}')`;
+        }
+    </script>
+</body>
+
+</html>
